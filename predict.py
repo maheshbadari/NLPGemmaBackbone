@@ -6,6 +6,7 @@ Usage:
 If no checkpoint is given, loads checkpoints/best.pt.
 """
 
+import re
 import sys
 import torch
 from transformers import AutoTokenizer
@@ -22,8 +23,13 @@ def load_model(ckpt: str, cfg: Config, device: torch.device) -> GemmaBackboneNER
     return model
 
 
+def word_tokenize(text: str):
+    """Split text into words + punctuation tokens, preserving original strings."""
+    return re.findall(r"\w+(?:'\w+)*|[^\w\s]", text)
+
+
 def run(text: str, model: GemmaBackboneNER, tokenizer, device, max_len: int):
-    words = text.split()
+    words = word_tokenize(text)
     enc   = tokenizer(
         words,
         is_split_into_words=True,
@@ -40,7 +46,20 @@ def run(text: str, model: GemmaBackboneNER, tokenizer, device, max_len: int):
     with torch.no_grad():
         entities = decode_batch((ident, loc, temp, dom), h, heads, attention_mask)
 
-    return entities[0]
+    # map subword token spans → word spans using word_ids()
+    word_ids  = enc.word_ids()
+    tok_to_word = {i: wid for i, wid in enumerate(word_ids) if wid is not None}
+
+    results = []
+    for e in entities[0]:
+        w_start = tok_to_word.get(e.start)
+        w_end   = tok_to_word.get(e.end - 1)
+        if w_start is None or w_end is None:
+            continue
+        surface = " ".join(words[w_start: w_end + 1])
+        results.append((surface, w_start, w_end + 1, e.label, e.confidence))
+
+    return results, words
 
 
 def main():
@@ -62,11 +81,11 @@ def main():
             break
         if not text:
             continue
-        entities = run(text, model, tokenizer, device, cfg.model.max_seq_len)
-        if not entities:
+        results, words = run(text, model, tokenizer, device, cfg.model.max_seq_len)
+        if not results:
             print("  (no entities)")
-        for e in entities:
-            print(f"  [{e.start}:{e.end}]  {e.label:<28}  conf={e.confidence:.3f}")
+        for surface, w_start, w_end, label, conf in results:
+            print(f"  [{w_start}:{w_end}]  '{surface}'  →  {label:<28}  conf={conf:.3f}")
 
 
 if __name__ == "__main__":
