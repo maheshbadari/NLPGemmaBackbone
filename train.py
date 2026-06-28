@@ -25,17 +25,25 @@ def make_scheduler(optimizer, warmup_steps, total_steps):
     return SequentialLR(optimizer, [warmup, decay], milestones=[warmup_steps])
 
 
+NUM_HEADS = 4
+
 @torch.no_grad()
 def evaluate(model, loader, device):
+    """Returns mean NLL per token per head — comparable across sequence lengths."""
     model.eval()
-    total, n = 0.0, 0
+    total_loss, total_tokens = 0.0, 0
     for batch in loader:
-        batch = {k: v.to(device) for k, v in batch.items()}
-        loss, _ = model(**batch)
-        if loss is not None:
-            total += loss.item(); n += 1
+        batch       = {k: v.to(device) for k, v in batch.items()}
+        loss, _     = model(**batch)
+        if loss is None:
+            continue
+        n_tokens     = batch["attention_mask"].sum().item()
+        # loss is mean-per-sequence summed over 4 heads; undo batch mean to get total NLL
+        batch_size   = batch["input_ids"].size(0)
+        total_loss  += loss.item() * batch_size          # total NLL across batch & heads
+        total_tokens += n_tokens * NUM_HEADS             # total token-head positions
     model.train()
-    return total / n if n else float("inf")
+    return total_loss / total_tokens if total_tokens else float("inf")
 
 
 def main():
