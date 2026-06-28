@@ -32,7 +32,7 @@ class ModelConfig:
 class TrainConfig:
     learning_rate: float = 2e-3
     batch_size: int = 16
-    epochs: int = 10
+    epochs: int = 50
     warmup_steps: int = 200
     weight_decay: float = 0.01
     grad_clip: float = 1.0

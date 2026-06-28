@@ -94,7 +94,13 @@ def main():
                     torch.save(model.state_dict(), f"{cfg.train.save_dir}/best.pt")
                     print(f"  ↑ saved best  (val_loss={val_loss:.4f})")
 
-        torch.save(model.state_dict(), f"{cfg.train.save_dir}/epoch_{epoch + 1}.pt")
+        # end-of-epoch eval — catches improvements in the final steps of each epoch
+        val_loss = evaluate(model, val_loader, device)
+        print(f"\nEpoch {epoch + 1}/{cfg.train.epochs}  val_loss={val_loss:.4f}  best={best_val:.4f}")
+        if val_loss < best_val:
+            best_val = val_loss
+            torch.save(model.state_dict(), f"{cfg.train.save_dir}/best.pt")
+            print(f"  ↑ saved best  (val_loss={val_loss:.4f})")
 
     print(f"\nDone. Best val loss: {best_val:.4f}")
 
