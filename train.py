@@ -67,6 +67,14 @@ def main():
     os.makedirs(cfg.train.save_dir, exist_ok=True)
     best_val, step = float("inf"), 0
 
+    # load existing best checkpoint if present so we don't start from scratch
+    best_path = f"{cfg.train.save_dir}/best.pt"
+    if os.path.exists(best_path):
+        model.load_state_dict(torch.load(best_path, map_location=device))
+        print(f"Loaded existing checkpoint: {best_path}")
+    else:
+        print("No checkpoint found — starting fresh.")
+
     for epoch in range(cfg.train.epochs):
         model.train()
         bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{cfg.train.epochs}")
